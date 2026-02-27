@@ -106,6 +106,38 @@
 }
 ```
 
+### POST `/admin/keys`
+- Header:
+  - `X-Admin-Key`
+- Response `200`:
+```json
+{
+  "success": true,
+  "data": {
+    "userId": 1,
+    "apiKey": "cka_xxx"
+  },
+  "error": null
+}
+```
+
+### POST `/admin/keys/{userId}/rotate`
+- Header:
+  - `X-Admin-Key`
+- Response `200`: same schema as `/admin/keys`
+
+### DELETE `/admin/keys/{userId}`
+- Header:
+  - `X-Admin-Key`
+- Response `200`:
+```json
+{
+  "success": true,
+  "data": null,
+  "error": null
+}
+```
+
 ## Error Model
 ```json
 {

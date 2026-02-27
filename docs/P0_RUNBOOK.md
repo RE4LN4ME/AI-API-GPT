@@ -91,3 +91,15 @@
 - 기동 확인:
   - `GET /health` => `200 {"status":"UP"}`
   - `GET /actuator/health/readiness` => `200`
+
+## 13) 관리자 API Key 운영
+- 관리자 키 환경변수:
+  - `ADMIN_API_KEY=<strong-random-secret>`
+- 발급:
+  - `POST /api/admin/keys` with `X-Admin-Key`
+- 회전:
+  - `POST /api/admin/keys/{userId}/rotate` with `X-Admin-Key`
+- 폐기:
+  - `DELETE /api/admin/keys/{userId}` with `X-Admin-Key`
+- 주의:
+  - 발급/회전 응답의 평문 API 키는 1회만 안전하게 전달/보관

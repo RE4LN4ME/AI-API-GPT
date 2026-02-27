@@ -15,6 +15,7 @@ Spring Boot 기반 GPT 챗 API 서버입니다.
 - `POST /api/chat/completions/stream`: SSE 스트리밍 응답
 - 대화/메시지 이력 조회 및 삭제
 - `X-API-Key` 기반 인증
+- `X-Admin-Key` 기반 API Key 발급/회전/폐기
 - API Key 기준 Rate Limiting
 - `/health`, `/actuator/health/readiness` 헬스체크
 
@@ -38,6 +39,7 @@ Spring Boot 기반 GPT 챗 API 서버입니다.
 - `APP_RATE_LIMIT_WINDOW_SECONDS` (기본값: `60`)
 - `OPENAI_FALLBACK_ON_RATE_LIMITED` (기본값: `false`)
 - `APP_CORS_ALLOWED_ORIGINS` (쉼표 구분, 예: `https://app.example.com,https://admin.example.com`)
+- `ADMIN_API_KEY` (관리자 API 호출용 키)
 
 ## 로컬 실행
 ```bash
@@ -105,6 +107,12 @@ curl -X POST "http://localhost:8081/api/chat/completions" \
 ```bash
 curl "http://localhost:8081/api/conversations?page=0&size=20" \
   -H "X-API-Key: <your-api-key>"
+```
+
+관리자 API Key 발급:
+```bash
+curl -X POST "http://localhost:8081/api/admin/keys" \
+  -H "X-Admin-Key: <admin-api-key>"
 ```
 
 ## CI
