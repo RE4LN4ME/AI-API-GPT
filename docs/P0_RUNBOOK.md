@@ -82,3 +82,12 @@
   - `app.rate-limit.window-seconds=60`
 - 기준: API Key별 요청 수 제한
 - 초과 시: `429 RATE_LIMITED`
+
+## 12) Docker 로컬 실행
+- 이미지 빌드:
+  - `docker build -t ai-api-gpt:local .`
+- 컨테이너 실행:
+  - `docker run --rm -p 8081:8081 -e DB_URL=<jdbc-url> -e DB_USERNAME=<db-user> -e DB_PASSWORD=<db-pass> -e OPENAI_API_KEY=<openai-key> ai-api-gpt:local`
+- 기동 확인:
+  - `GET /health` => `200 {"status":"UP"}`
+  - `GET /actuator/health/readiness` => `200`
