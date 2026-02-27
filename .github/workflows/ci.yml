@@ -67,19 +67,26 @@ jobs:
       - name: Grant gradlew execute permission
         run: chmod +x ./gradlew
 
-      - name: Boot run
+      - name: Boot and smoke
         run: |
           ./gradlew bootRun --no-daemon > bootrun.out.log 2> bootrun.err.log &
           echo $! > boot.pid
-          sleep 20
 
-      - name: Health check
-        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:8081/health > /dev/null; then
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "Server did not become ready in time"
+              tail -n 200 bootrun.err.log || true
+              tail -n 200 bootrun.out.log || true
+              exit 1
+            fi
+            sleep 2
+          done
+
           curl -sSf http://localhost:8081/health
           curl -sSf http://localhost:8081/actuator/health
-
-      - name: API smoke
-        run: |
           status=$(curl -s -o /tmp/conversations.json -w "%{http_code}" -H "X-API-Key: ${APP_BOOTSTRAP_USER_API_KEY}" http://localhost:8081/api/conversations)
           test "$status" = "200"
 
