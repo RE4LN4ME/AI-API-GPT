@@ -74,3 +74,11 @@
 - 기본값: `openai.fallback-on-rate-limited=false`
 - 의미: OpenAI가 `429`를 반환하면 서버도 `429 RATE_LIMITED`로 응답
 - 운영에서 fallback 문구 응답이 필요할 때만 환경변수로 명시적으로 활성화
+
+## 11) 서버 레이트리밋
+- 기본값:
+  - `app.rate-limit.enabled=true`
+  - `app.rate-limit.requests-per-window=60`
+  - `app.rate-limit.window-seconds=60`
+- 기준: API Key별 요청 수 제한
+- 초과 시: `429 RATE_LIMITED`

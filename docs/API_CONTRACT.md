@@ -122,6 +122,6 @@
 - `BAD_REQUEST`: validation/input errors
 - `UNAUTHORIZED`: missing or invalid API key
 - `NOT_FOUND`: resource not found or no ownership
-- `RATE_LIMITED`: OpenAI quota exceeded (`429`)
+- `RATE_LIMITED`: server rate limit exceeded or OpenAI quota exceeded (`429`)
 - `UPSTREAM_ERROR`: external AI/network failure
 - `INTERNAL_ERROR`: unexpected server error
