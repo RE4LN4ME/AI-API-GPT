@@ -13,6 +13,7 @@ Spring Boot 기반 GPT 챗 API 서버입니다.
 ## 주요 기능
 - `POST /api/chat/completions`: 일반 채팅 응답
 - `POST /api/chat/completions/stream`: SSE 스트리밍 응답
+- `POST /api/users/register`: 사용자 등록 + API Key 발급
 - 대화/메시지 이력 조회 및 삭제
 - `X-API-Key` 기반 인증
 - API Key 기준 Rate Limiting
@@ -91,6 +92,13 @@ docker run --rm -p 8081:8081 \
 ```http
 X-API-Key: <your-api-key>
 ```
+
+## 사용자 등록(필수 선행)
+먼저 API Key를 발급받아야 합니다.
+```bash
+curl -X POST "http://localhost:8081/api/users/register"
+```
+응답의 `data.apiKey` 값을 Swagger `Authorize` 또는 요청 헤더 `X-API-Key`에 사용하세요.
 
 ## API 빠른 예제
 채팅 요청:

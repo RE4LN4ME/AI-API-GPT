@@ -18,6 +18,21 @@
 }
 ```
 
+### POST `/users/register`
+- Auth: none
+- Request body: none
+- Response `200`:
+```json
+{
+  "success": true,
+  "data": {
+    "userId": 1,
+    "apiKey": "ak_xxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "error": null
+}
+```
+
 ### POST `/chat/completions`
 - Request:
 ```json
