@@ -1,0 +1,15 @@
+.git
+.github
+.gradle
+.idea
+.settings
+.vscode
+AI-API-GPT
+bin
+build
+docs
+scripts
+*.log
+*.iml
+.env
+.env.*
