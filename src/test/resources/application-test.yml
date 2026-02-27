@@ -17,3 +17,9 @@ openai:
   api-key: test-openai-key
   model: gpt-4o-mini
   base-url: https://api.openai.com/v1
+
+app:
+  rate-limit:
+    enabled: true
+    requests-per-window: 3
+    window-seconds: 60

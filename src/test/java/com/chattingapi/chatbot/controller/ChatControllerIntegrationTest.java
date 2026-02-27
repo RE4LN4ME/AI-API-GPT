@@ -10,6 +10,7 @@ import com.chattingapi.chatbot.repository.MessageRepository;
 import com.chattingapi.chatbot.repository.UserRepository;
 import com.chattingapi.chatbot.service.ApiKeyHasher;
 import com.chattingapi.chatbot.service.OpenAIService;
+import com.chattingapi.chatbot.service.RateLimitService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +59,9 @@ class ChatControllerIntegrationTest {
     @Autowired
     private ApiKeyHasher apiKeyHasher;
 
+    @Autowired
+    private RateLimitService rateLimitService;
+
     @MockitoBean
     private OpenAIService openAIService;
 
@@ -69,6 +73,7 @@ class ChatControllerIntegrationTest {
         messageRepository.deleteAll();
         conversationRepository.deleteAll();
         userRepository.deleteAll();
+        rateLimitService.clearAll();
 
         String hashed = apiKeyHasher.hash(USER_API_KEY);
         userRepository.save(User.create(hashed));
@@ -201,5 +206,19 @@ class ChatControllerIntegrationTest {
         mockMvc.perform(get("/health").header("X-Request-Id", "trace-abc-123"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Request-Id", "trace-abc-123"));
+    }
+
+    @Test
+    void getConversations_rateLimitExceeded_returns429() throws Exception {
+        mockMvc.perform(get("/api/conversations").header("X-API-Key", USER_API_KEY))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/conversations").header("X-API-Key", USER_API_KEY))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/conversations").header("X-API-Key", USER_API_KEY))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/conversations").header("X-API-Key", USER_API_KEY))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error.code").value("RATE_LIMITED"));
     }
 }

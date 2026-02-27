@@ -1,6 +1,10 @@
 app:
   bootstrap-user:
     enabled: false
+  rate-limit:
+    enabled: true
+    requests-per-window: 60
+    window-seconds: 60
 
 openai:
   fallback-on-rate-limited: false

@@ -60,3 +60,7 @@ app:
   bootstrap-user:
     enabled: false
     api-key: ${OPENAI_API_KEY:}
+  rate-limit:
+    enabled: true
+    requests-per-window: 60
+    window-seconds: 60

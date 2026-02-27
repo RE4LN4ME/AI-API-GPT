@@ -35,8 +35,10 @@ public class ChatService {
     private final OpenAIService openAIService;
     private final ApiKeyHasher apiKeyHasher;
     private final TransactionTemplate transactionTemplate;
+    private final RateLimitService rateLimitService;
 
     public MessageDto processChat(String apiKey, ChatRequest request) {
+        enforceRateLimit(apiKey);
         User user = findUserByApiKey(apiKey);
 
         Long conversationId = Objects.requireNonNull(transactionTemplate.execute(status -> {
@@ -71,6 +73,7 @@ public class ChatService {
     }
 
     public SseEmitter processChatStream(String apiKey, ChatRequest request) {
+        enforceRateLimit(apiKey);
         User user = findUserByApiKey(apiKey);
 
         Long conversationId = Objects.requireNonNull(transactionTemplate.execute(status -> {
@@ -127,6 +130,7 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public PageResult<ConversationDto> getConversations(String apiKey, int page, int size) {
+        enforceRateLimit(apiKey);
         User user = findUserByApiKey(apiKey);
         var result = conversationRepository.findByUserIdOrderByUpdatedAtDesc(user.getId(), PageRequest.of(page, size))
                 .map(ConversationDto::fromEntity);
@@ -135,6 +139,7 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public ConversationDto getConversation(String apiKey, Long conversationId) {
+        enforceRateLimit(apiKey);
         User user = findUserByApiKey(apiKey);
         Conversation conversation = conversationRepository.findByIdAndUserId(conversationId, user.getId())
                 .orElseThrow(() -> new NotFoundException("Conversation not found"));
@@ -143,6 +148,7 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public PageResult<MessageDto> getMessages(String apiKey, Long conversationId, int page, int size) {
+        enforceRateLimit(apiKey);
         User user = findUserByApiKey(apiKey);
         var result = messageRepository
                 .findByConversationIdAndConversationUserIdOrderByCreatedAtAsc(conversationId, user.getId(), PageRequest.of(page, size))
@@ -152,6 +158,7 @@ public class ChatService {
 
     @Transactional
     public void deleteConversation(String apiKey, Long conversationId) {
+        enforceRateLimit(apiKey);
         User user = findUserByApiKey(apiKey);
         Conversation conversation = conversationRepository.findByIdAndUserId(conversationId, user.getId())
                 .orElseThrow(() -> new NotFoundException("Conversation not found"));
@@ -168,6 +175,10 @@ public class ChatService {
     private String makeTitle(String message) {
         String m = message.strip();
         return m.substring(0, Math.min(50, m.length()));
+    }
+
+    private void enforceRateLimit(String apiKey) {
+        rateLimitService.checkOrThrow(apiKey);
     }
 
     private void saveAssistantMessage(Long conversationId, Long userId, String content) {

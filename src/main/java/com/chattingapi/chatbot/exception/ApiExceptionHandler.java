@@ -42,6 +42,12 @@ public class ApiExceptionHandler {
                 .body(ApiResponse.fail(ErrorCode.BAD_REQUEST, e.getMessage()));
     }
 
+    @ExceptionHandler(RateLimitedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRateLimited(RateLimitedException e) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ApiResponse.fail(ErrorCode.RATE_LIMITED, e.getMessage()));
+    }
+
     @ExceptionHandler(UpstreamException.class)
     public ResponseEntity<ApiResponse<Void>> handleUpstream(UpstreamException e) {
         return ResponseEntity.status(e.getStatus())
