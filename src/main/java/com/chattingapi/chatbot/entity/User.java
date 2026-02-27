@@ -35,4 +35,14 @@ public class User {
     void preUpdate() {
         this.updatedAt = OffsetDateTime.now();
     }
+
+    public void updateApiKey(String apiKey) {
+        this.apiKey = apiKey;
+    }
+
+    public static User create(String apiKey) {
+        User user = new User();
+        user.apiKey = apiKey;
+        return user;
+    }
 }

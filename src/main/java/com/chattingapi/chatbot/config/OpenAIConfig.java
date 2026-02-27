@@ -12,8 +12,8 @@ public class OpenAIConfig {
     private String baseUrl;
 
     @Bean
-    public WebClient webClient(WebClient.Builder builder) {
-        return builder
+    public WebClient webClient() {
+        return WebClient.builder()
                 .baseUrl(baseUrl)
                 .build();
     }

@@ -3,19 +3,24 @@ package com.chattingapi.chatbot.service;
 import com.chattingapi.chatbot.dto.ChatRequest;
 import com.chattingapi.chatbot.dto.ConversationDto;
 import com.chattingapi.chatbot.dto.MessageDto;
+import com.chattingapi.chatbot.dto.PageResult;
 import com.chattingapi.chatbot.entity.Conversation;
 import com.chattingapi.chatbot.entity.Message;
 import com.chattingapi.chatbot.entity.User;
 import com.chattingapi.chatbot.exception.NotFoundException;
+import com.chattingapi.chatbot.exception.UnauthorizedException;
 import com.chattingapi.chatbot.repository.ConversationRepository;
 import com.chattingapi.chatbot.repository.MessageRepository;
 import com.chattingapi.chatbot.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -25,56 +30,81 @@ public class ChatService {
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
     private final OpenAIService openAIService;
+    private final ApiKeyHasher apiKeyHasher;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
     public MessageDto processChat(String apiKey, ChatRequest request) {
-        User user = userRepository.findByApiKey(apiKey)
-                .orElseThrow(() -> new NotFoundException("User not found")); // 임시 처리
+        User user = findUserByApiKey(apiKey);
 
-        Conversation conversation;
-        if (request.getConversationId() != null) {
-            conversation = conversationRepository.findById(request.getConversationId())
+        Long conversationId = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            Conversation conversation;
+            if (request.getConversationId() != null) {
+                conversation = conversationRepository.findByIdAndUserId(request.getConversationId(), user.getId())
+                        .orElseThrow(() -> new NotFoundException("Conversation not found"));
+            } else {
+                String title = makeTitle(request.getMessage());
+                conversation = conversationRepository.save(Conversation.create(user, title));
+            }
+            messageRepository.save(Message.of(conversation, "user", request.getMessage()));
+            return conversation.getId();
+        }));
+
+        List<Message> context = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            List<Message> ctx = messageRepository
+                    .findTop10ByConversationIdAndConversationUserIdOrderByCreatedAtDesc(conversationId, user.getId());
+            Collections.reverse(ctx);
+            return ctx;
+        }));
+
+        String ai = openAIService.chat(context);
+
+        Message saved = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            Conversation conversation = conversationRepository.findByIdAndUserId(conversationId, user.getId())
                     .orElseThrow(() -> new NotFoundException("Conversation not found"));
-            // TODO: conversation.user.id == user.id 체크 추가.
-        } else {
-            String title = makeTitle(request.getMessage());
-            conversation = conversationRepository.save(Conversation.create(user, title));
-        }
-
-        // user 메시지 저장
-        messageRepository.save(Message.of(conversation, "user", request.getMessage()));
-
-        // 최근 10개 컨텍스트 구성
-        List<Message> ctx = messageRepository.findTop10ByConversationIdOrderByCreatedAtDesc(conversation.getId());
-        Collections.reverse(ctx);
-
-        // OpenAI 호출
-        String ai = openAIService.chat(ctx);
-
-        // assistant 저장
-        Message saved = messageRepository.save(Message.of(conversation, "assistant", ai));
+            return messageRepository.save(Message.of(conversation, "assistant", ai));
+        }));
 
         return MessageDto.fromEntity(saved);
     }
 
     @Transactional(readOnly = true)
-    public List<ConversationDto> getConversations(String apiKey) {
-        User user = userRepository.findByApiKey(apiKey)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-
-        return conversationRepository.findByUserIdOrderByUpdatedAtDesc(user.getId())
-                .stream().map(ConversationDto::fromEntity).toList();
+    public PageResult<ConversationDto> getConversations(String apiKey, int page, int size) {
+        User user = findUserByApiKey(apiKey);
+        var result = conversationRepository.findByUserIdOrderByUpdatedAtDesc(user.getId(), PageRequest.of(page, size))
+                .map(ConversationDto::fromEntity);
+        return PageResult.from(result);
     }
 
     @Transactional(readOnly = true)
-    public List<MessageDto> getMessages(Long conversationId) {
-        return messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)
-                .stream().map(MessageDto::fromEntity).toList();
+    public ConversationDto getConversation(String apiKey, Long conversationId) {
+        User user = findUserByApiKey(apiKey);
+        Conversation conversation = conversationRepository.findByIdAndUserId(conversationId, user.getId())
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+        return ConversationDto.fromEntity(conversation);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResult<MessageDto> getMessages(String apiKey, Long conversationId, int page, int size) {
+        User user = findUserByApiKey(apiKey);
+        var result = messageRepository
+                .findByConversationIdAndConversationUserIdOrderByCreatedAtAsc(conversationId, user.getId(), PageRequest.of(page, size))
+                .map(MessageDto::fromEntity);
+        return PageResult.from(result);
     }
 
     @Transactional
-    public void deleteConversation(Long conversationId) {
-        conversationRepository.deleteById(conversationId);
+    public void deleteConversation(String apiKey, Long conversationId) {
+        User user = findUserByApiKey(apiKey);
+        Conversation conversation = conversationRepository.findByIdAndUserId(conversationId, user.getId())
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+        conversationRepository.delete(conversation);
+    }
+
+    private User findUserByApiKey(String apiKey) {
+        String hashedApiKey = apiKeyHasher.hash(apiKey);
+        return userRepository.findByApiKey(hashedApiKey)
+                .or(() -> userRepository.findByApiKey(apiKey))
+                .orElseThrow(() -> new UnauthorizedException("Invalid API key"));
     }
 
     private String makeTitle(String message) {

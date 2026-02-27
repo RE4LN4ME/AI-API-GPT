@@ -4,56 +4,86 @@ import com.chattingapi.chatbot.dto.ApiResponse;
 import com.chattingapi.chatbot.dto.ChatRequest;
 import com.chattingapi.chatbot.dto.ConversationDto;
 import com.chattingapi.chatbot.dto.MessageDto;
+import com.chattingapi.chatbot.dto.PageResult;
 import com.chattingapi.chatbot.exception.BadRequestException;
 import com.chattingapi.chatbot.service.ChatService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
+@Validated
 public class ChatController {
 
     private final ChatService chatService;
 
     @PostMapping("/chat/completions")
+    @Operation(summary = "Generate assistant reply")
     public ResponseEntity<ApiResponse<MessageDto>> chat(
             @RequestHeader(name = "X-API-Key", required = false) String apiKey,
             @Valid @RequestBody ChatRequest request
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new BadRequestException("X-API-Key required");
-        }
+        requireApiKey(apiKey);
         MessageDto response = chatService.processChat(apiKey, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/conversations")
-    public ResponseEntity<ApiResponse<List<ConversationDto>>> getConversations(
-            @RequestHeader(name = "X-API-Key", required = false) String apiKey
+    @Operation(summary = "List conversations")
+    public ResponseEntity<ApiResponse<PageResult<ConversationDto>>> getConversations(
+            @RequestHeader(name = "X-API-Key", required = false) String apiKey,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        if (apiKey == null || apiKey.isBlank()) throw new BadRequestException("X-API-Key required");
-        return ResponseEntity.ok(ApiResponse.success(chatService.getConversations(apiKey)));
+        requireApiKey(apiKey);
+        return ResponseEntity.ok(ApiResponse.success(chatService.getConversations(apiKey, page, size)));
     }
 
     @GetMapping("/conversations/{id}/messages")
-    public ResponseEntity<ApiResponse<List<MessageDto>>> getMessages(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(chatService.getMessages(id)));
+    @Operation(summary = "List messages in a conversation")
+    public ResponseEntity<ApiResponse<PageResult<MessageDto>>> getMessages(
+            @RequestHeader(name = "X-API-Key", required = false) String apiKey,
+            @PathVariable @Min(1) Long id,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "50") @Min(1) @Max(200) int size
+    ) {
+        requireApiKey(apiKey);
+        return ResponseEntity.ok(ApiResponse.success(chatService.getMessages(apiKey, id, page, size)));
     }
 
     @DeleteMapping("/conversations/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteConversation(@PathVariable Long id) {
-        chatService.deleteConversation(id);
+    @Operation(summary = "Delete a conversation")
+    public ResponseEntity<ApiResponse<Void>> deleteConversation(
+            @RequestHeader(name = "X-API-Key", required = false) String apiKey,
+            @PathVariable @Min(1) Long id
+    ) {
+        requireApiKey(apiKey);
+        chatService.deleteConversation(apiKey, id);
         return ResponseEntity.ok(ApiResponse.success());
     }
 
     @GetMapping("/conversations/{id}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getConversation(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(Map.of("id", id)));
+    @Operation(summary = "Get conversation detail")
+    public ResponseEntity<ApiResponse<ConversationDto>> getConversation(
+            @RequestHeader(name = "X-API-Key", required = false) String apiKey,
+            @PathVariable @Min(1) Long id
+    ) {
+        requireApiKey(apiKey);
+        return ResponseEntity.ok(ApiResponse.success(chatService.getConversation(apiKey, id)));
+    }
+
+    private void requireApiKey(String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new BadRequestException("X-API-Key required");
+        }
     }
 }

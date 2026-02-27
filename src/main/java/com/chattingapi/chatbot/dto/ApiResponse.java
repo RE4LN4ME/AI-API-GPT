@@ -1,5 +1,6 @@
 package com.chattingapi.chatbot.dto;
 
+import com.chattingapi.chatbot.exception.ErrorCode;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -18,6 +19,9 @@ public class ApiResponse<T> {
     }
     public static ApiResponse<Void> fail(String code, String message) {
         return ApiResponse.of(false, null, new ApiError(code, message));
+    }
+    public static ApiResponse<Void> fail(ErrorCode code, String message) {
+        return ApiResponse.of(false, null, new ApiError(code.name(), message));
     }
 
     @Getter @AllArgsConstructor
