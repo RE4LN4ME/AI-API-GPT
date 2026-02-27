@@ -69,3 +69,8 @@
   - `./gradlew bootRun` 실행
   - `GET /health`, `GET /actuator/health` 검증
   - 인증 포함 `GET /api/conversations` 응답 `200` 검증
+
+## 10) OpenAI 429 정책 기본값
+- 기본값: `openai.fallback-on-rate-limited=false`
+- 의미: OpenAI가 `429`를 반환하면 서버도 `429 RATE_LIMITED`로 응답
+- 운영에서 fallback 문구 응답이 필요할 때만 환경변수로 명시적으로 활성화
