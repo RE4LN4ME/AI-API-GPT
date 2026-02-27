@@ -3,6 +3,8 @@ package com.chattingapi.chatbot.service;
 import com.chattingapi.chatbot.entity.Message;
 import com.chattingapi.chatbot.exception.ErrorCode;
 import com.chattingapi.chatbot.exception.UpstreamException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,7 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -26,6 +31,7 @@ import java.util.Map;
 public class OpenAIService {
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${openai.api-key}")
     private String apiKey;
@@ -120,6 +126,43 @@ public class OpenAIService {
         return content;
     }
 
+    public Flux<String> chatStream(List<Message> contextMessages) {
+        String token = apiKey == null ? "" : apiKey.trim();
+        if (token.isBlank()) {
+            return Flux.error(new UpstreamException("OpenAI API key is empty"));
+        }
+
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", "You are a helpful assistant."));
+        for (Message m : contextMessages) {
+            messages.add(Map.of("role", m.getRole(), "content", m.getContent()));
+        }
+
+        Map<String, Object> body = Map.of(
+                "model", model,
+                "messages", messages,
+                "temperature", 0.7,
+                "stream", true
+        );
+
+        Flux<String> raw = webClient.post()
+                .uri("/chat/completions")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.TEXT_EVENT_STREAM)
+                .bodyValue(body)
+                .retrieve()
+                .onStatus(
+                        status -> status.isError(),
+                        clientResponse -> clientResponse.bodyToMono(String.class)
+                                .defaultIfEmpty("")
+                                .flatMap(errorBody -> Mono.error(toUpstreamException(clientResponse.statusCode().value(), errorBody)))
+                )
+                .bodyToFlux(String.class);
+
+        return decodeOpenAiSse(raw);
+    }
+
     private String summarize(String body) {
         if (body == null || body.isBlank()) {
             return "empty error body";
@@ -147,17 +190,7 @@ public class OpenAIService {
                                     .defaultIfEmpty("")
                                     .flatMap(errorBody -> {
                                         int code = clientResponse.statusCode().value();
-                                        log.warn("OpenAI API error status={} body={}", code, sanitize(errorBody));
-                                        if (code == 429) {
-                                            return Mono.error(new UpstreamException(
-                                                    HttpStatus.TOO_MANY_REQUESTS,
-                                                    ErrorCode.RATE_LIMITED,
-                                                    "OpenAI quota exceeded"
-                                            ));
-                                        }
-                                        return Mono.error(new UpstreamException(
-                                                "OpenAI API error: " + code + " " + summarize(errorBody)
-                                        ));
+                                        return Mono.error(toUpstreamException(code, errorBody));
                                     })
                     )
                     .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
@@ -165,12 +198,80 @@ public class OpenAIService {
         } catch (WebClientRequestException e) {
             log.warn("OpenAI API network error: {}", e.getMessage());
             throw new UpstreamException("OpenAI API network error");
+        } catch (WebClientResponseException e) {
+            throw toUpstreamException(e.getStatusCode().value(), e.getResponseBodyAsString());
         } catch (UpstreamException e) {
             throw e;
         } catch (Exception e) {
             log.warn("OpenAI API unexpected error: {}", e.getMessage());
             throw new UpstreamException("OpenAI API call failed");
         }
+    }
+
+    private Flux<String> decodeOpenAiSse(Flux<String> raw) {
+        return Flux.create(sink -> {
+            StringBuilder buffer = new StringBuilder();
+
+            raw.subscribe(
+                    chunk -> {
+                        buffer.append(chunk);
+                        emitCompletedLines(buffer, sink);
+                    },
+                    sink::error,
+                    () -> {
+                        if (!buffer.isEmpty()) {
+                            handleSseLine(buffer.toString().trim(), sink);
+                        }
+                        sink.complete();
+                    }
+            );
+        });
+    }
+
+    private void emitCompletedLines(StringBuilder buffer, FluxSink<String> sink) {
+        int newLineIndex;
+        while ((newLineIndex = buffer.indexOf("\n")) >= 0) {
+            String line = buffer.substring(0, newLineIndex).trim();
+            buffer.delete(0, newLineIndex + 1);
+            handleSseLine(line, sink);
+        }
+    }
+
+    private void handleSseLine(String line, FluxSink<String> sink) {
+        if (line.isBlank() || !line.startsWith("data:")) {
+            return;
+        }
+
+        String payload = line.substring(5).trim();
+        if ("[DONE]".equals(payload)) {
+            sink.complete();
+            return;
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            JsonNode contentNode = root.path("choices").path(0).path("delta").path("content");
+            if (!contentNode.isMissingNode() && !contentNode.isNull()) {
+                String token = contentNode.asText("");
+                if (!token.isBlank()) {
+                    sink.next(token);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("OpenAI stream chunk parse skipped: {}", e.getMessage());
+        }
+    }
+
+    private UpstreamException toUpstreamException(int code, String errorBody) {
+        log.warn("OpenAI API error status={} body={}", code, sanitize(errorBody));
+        if (code == 429) {
+            return new UpstreamException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    ErrorCode.RATE_LIMITED,
+                    "OpenAI quota exceeded"
+            );
+        }
+        return new UpstreamException("OpenAI API error: " + code + " " + summarize(errorBody));
     }
 
     private void sleepRetryDelay() {

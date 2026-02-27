@@ -13,10 +13,13 @@ import com.chattingapi.chatbot.repository.ConversationRepository;
 import com.chattingapi.chatbot.repository.MessageRepository;
 import com.chattingapi.chatbot.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.Disposable;
 
 import java.util.Collections;
 import java.util.List;
@@ -67,6 +70,61 @@ public class ChatService {
         return MessageDto.fromEntity(saved);
     }
 
+    public SseEmitter processChatStream(String apiKey, ChatRequest request) {
+        User user = findUserByApiKey(apiKey);
+
+        Long conversationId = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            Conversation conversation;
+            if (request.getConversationId() != null) {
+                conversation = conversationRepository.findByIdAndUserId(request.getConversationId(), user.getId())
+                        .orElseThrow(() -> new NotFoundException("Conversation not found"));
+            } else {
+                String title = makeTitle(request.getMessage());
+                conversation = conversationRepository.save(Conversation.create(user, title));
+            }
+            messageRepository.save(Message.of(conversation, "user", request.getMessage()));
+            return conversation.getId();
+        }));
+
+        List<Message> context = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            List<Message> ctx = messageRepository
+                    .findTop10ByConversationIdAndConversationUserIdOrderByCreatedAtDesc(conversationId, user.getId());
+            Collections.reverse(ctx);
+            return ctx;
+        }));
+
+        SseEmitter emitter = new SseEmitter(0L);
+        StringBuilder assistant = new StringBuilder();
+
+        Disposable disposable = openAIService.chatStream(context)
+                .subscribe(
+                        token -> {
+                            assistant.append(token);
+                            sendEvent(emitter, "token", token);
+                        },
+                        error -> {
+                            sendEvent(emitter, "error", "stream failed");
+                            emitter.complete();
+                        },
+                        () -> {
+                            if (!assistant.isEmpty()) {
+                                saveAssistantMessage(conversationId, user.getId(), assistant.toString());
+                            }
+                            sendEvent(emitter, "done", "[DONE]");
+                            emitter.complete();
+                        }
+                );
+
+        emitter.onCompletion(disposable::dispose);
+        emitter.onTimeout(() -> {
+            disposable.dispose();
+            emitter.complete();
+        });
+        emitter.onError(ignored -> disposable.dispose());
+
+        return emitter;
+    }
+
     @Transactional(readOnly = true)
     public PageResult<ConversationDto> getConversations(String apiKey, int page, int size) {
         User user = findUserByApiKey(apiKey);
@@ -110,5 +168,25 @@ public class ChatService {
     private String makeTitle(String message) {
         String m = message.strip();
         return m.substring(0, Math.min(50, m.length()));
+    }
+
+    private void saveAssistantMessage(Long conversationId, Long userId, String content) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Conversation conversation = conversationRepository.findByIdAndUserId(conversationId, userId)
+                    .orElseThrow(() -> new NotFoundException("Conversation not found"));
+            messageRepository.save(Message.of(conversation, "assistant", content));
+        });
+    }
+
+    private void sendEvent(SseEmitter emitter, String name, String data) {
+        try {
+            emitter.send(
+                    SseEmitter.event()
+                            .name(name)
+                            .data(data, MediaType.TEXT_PLAIN)
+            );
+        } catch (Exception ignored) {
+            emitter.complete();
+        }
     }
 }

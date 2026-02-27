@@ -12,9 +12,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api")
@@ -33,6 +35,16 @@ public class ChatController {
         requireApiKey(apiKey);
         MessageDto response = chatService.processChat(apiKey, request);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping(value = "/chat/completions/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "Generate assistant reply (stream)")
+    public SseEmitter chatStream(
+            @RequestHeader(name = "X-API-Key", required = false) String apiKey,
+            @Valid @RequestBody ChatRequest request
+    ) {
+        requireApiKey(apiKey);
+        return chatService.processChatStream(apiKey, request);
     }
 
     @GetMapping("/conversations")
