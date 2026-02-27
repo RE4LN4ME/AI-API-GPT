@@ -40,6 +40,15 @@
 }
 ```
 
+### POST `/chat/completions/stream`
+- Request: same as `/chat/completions`
+- Response `200`:
+  - `Content-Type: text/event-stream`
+  - SSE events:
+    - `event: token` + partial text chunk
+    - `event: done` + `[DONE]`
+    - `event: error` + error message (when stream fails)
+
 ### GET `/conversations?page=0&size=20`
 - Query:
   - `page` >= 0
