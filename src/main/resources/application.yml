@@ -30,6 +30,7 @@ openai:
   timeout-seconds: 30
   max-retries: 2
   retry-delay-ms: 500
+  fallback-on-rate-limited: false
 
 server:
   port: 8081

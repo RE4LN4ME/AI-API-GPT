@@ -42,7 +42,7 @@ public class OpenAIService {
     @Value("${openai.retry-delay-ms:500}")
     private long retryDelayMs;
 
-    @Value("${openai.fallback-on-rate-limited:true}")
+    @Value("${openai.fallback-on-rate-limited:false}")
     private boolean fallbackOnRateLimited;
 
     @Value("${openai.fallback-message:AI response is temporarily unavailable. Please try again shortly.}")
