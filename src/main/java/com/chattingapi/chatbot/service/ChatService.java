@@ -110,6 +110,20 @@ public class ChatService {
                             emitter.complete();
                         },
                         () -> {
+                            if (assistant.isEmpty()) {
+                                try {
+                                    String fallback = openAIService.chat(context);
+                                    if (fallback != null && !fallback.isBlank()) {
+                                        assistant.append(fallback);
+                                        sendEvent(emitter, "token", fallback);
+                                    }
+                                } catch (Exception ignored) {
+                                    sendEvent(emitter, "error", "stream empty and fallback failed");
+                                    emitter.complete();
+                                    return;
+                                }
+                            }
+
                             if (!assistant.isEmpty()) {
                                 saveAssistantMessage(conversationId, user.getId(), assistant.toString());
                             }

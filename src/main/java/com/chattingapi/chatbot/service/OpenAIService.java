@@ -238,11 +238,17 @@ public class OpenAIService {
     }
 
     private void handleSseLine(String line, FluxSink<String> sink) {
-        if (line.isBlank() || !line.startsWith("data:")) {
+        if (line.isBlank()) {
             return;
         }
 
-        String payload = line.substring(5).trim();
+        String payload = line;
+        if (line.startsWith("data:")) {
+            payload = line.substring(5).trim();
+        } else if (!line.startsWith("{")) {
+            return;
+        }
+
         if ("[DONE]".equals(payload)) {
             sink.complete();
             return;
@@ -250,11 +256,27 @@ public class OpenAIService {
 
         try {
             JsonNode root = objectMapper.readTree(payload);
-            JsonNode contentNode = root.path("choices").path(0).path("delta").path("content");
-            if (!contentNode.isMissingNode() && !contentNode.isNull()) {
+            JsonNode deltaNode = root.path("choices").path(0).path("delta");
+            if (deltaNode.isMissingNode() || deltaNode.isNull()) {
+                return;
+            }
+
+            JsonNode contentNode = deltaNode.path("content");
+            if (contentNode.isTextual()) {
                 String token = contentNode.asText("");
                 if (!token.isBlank()) {
                     sink.next(token);
+                }
+                return;
+            }
+
+            // Handle providers that stream structured chunks in content array form.
+            if (contentNode.isArray()) {
+                for (JsonNode part : contentNode) {
+                    String token = part.path("text").asText("");
+                    if (!token.isBlank()) {
+                        sink.next(token);
+                    }
                 }
             }
         } catch (Exception e) {
