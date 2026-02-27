@@ -23,3 +23,5 @@ app:
     enabled: true
     requests-per-window: 3
     window-seconds: 60
+  admin:
+    api-key: test-admin-key
