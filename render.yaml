@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: ai-api-gpt
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_FALLBACK_ON_RATE_LIMITED
+        value: "false"
+      - key: APP_RATE_LIMIT_ENABLED
+        value: "true"
+      - key: APP_RATE_LIMIT_REQUESTS_PER_WINDOW
+        value: "60"
+      - key: APP_RATE_LIMIT_WINDOW_SECONDS
+        value: "60"
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: APP_CORS_ALLOWED_ORIGINS
+        sync: false
