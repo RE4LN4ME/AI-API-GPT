@@ -5,7 +5,7 @@ import com.chattingapi.chatbot.dto.ChatRequest;
 import com.chattingapi.chatbot.dto.ConversationDto;
 import com.chattingapi.chatbot.dto.MessageDto;
 import com.chattingapi.chatbot.dto.PageResult;
-import com.chattingapi.chatbot.exception.BadRequestException;
+import com.chattingapi.chatbot.exception.UnauthorizedException;
 import com.chattingapi.chatbot.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -15,8 +15,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api")
@@ -83,7 +81,7 @@ public class ChatController {
 
     private void requireApiKey(String apiKey) {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new BadRequestException("X-API-Key required");
+            throw new UnauthorizedException("X-API-Key required");
         }
     }
 }

@@ -110,8 +110,8 @@
 ```
 
 ## Error Codes
-- `BAD_REQUEST`: validation/header/input errors
-- `UNAUTHORIZED`: invalid API key
+- `BAD_REQUEST`: validation/input errors
+- `UNAUTHORIZED`: missing or invalid API key
 - `NOT_FOUND`: resource not found or no ownership
 - `RATE_LIMITED`: OpenAI quota exceeded (`429`)
 - `UPSTREAM_ERROR`: external AI/network failure

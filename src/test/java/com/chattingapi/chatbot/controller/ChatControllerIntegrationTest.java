@@ -79,8 +79,8 @@ class ChatControllerIntegrationTest {
     @Test
     void getConversations_requiresApiKey() throws Exception {
         mockMvc.perform(get("/api/conversations"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code").value("BAD_REQUEST"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
 
     @Test
