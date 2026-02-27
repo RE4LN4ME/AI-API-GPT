@@ -64,3 +64,6 @@ app:
     enabled: true
     requests-per-window: 60
     window-seconds: 60
+  cors:
+    allowed-origins:
+      - http://localhost:3000

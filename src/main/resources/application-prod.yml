@@ -5,6 +5,9 @@ app:
     enabled: true
     requests-per-window: 60
     window-seconds: 60
+  cors:
+    allowed-origins:
+      - https://example.com
 
 openai:
   fallback-on-rate-limited: false
